@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>異星人算術混合進数コンバーター＆暗算ゲーム</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { background: #05070f; }
+  .star { position:fixed; border-radius:50%; background:white; pointer-events:none; }
+  .panel { background:rgba(10,15,40,0.9); border:1px solid rgba(100,180,255,0.25); }
+  .digit-box { background:rgba(0,200,255,0.08); border:1px solid rgba(0,200,255,0.3); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .blink { animation: pulse 0.8s infinite; }
+  @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+  .shake { animation: shake 0.3s; }
+</style>
+</head>
+<body class="min-h-screen text-cyan-100 py-6 px-4">
+
+<div id="stars"></div>
+
+<div class="max-w-3xl mx-auto relative z-10">
+  <div class="text-center mb-6">
+    <div class="text-3xl font-bold text-cyan-300">👾 異星人算術コンバーター</div>
+    <div class="text-sm text-cyan-500 mt-1">銀河貿易連盟の進数変換訓練システム</div>
+  </div>
+
+  <!-- タブ -->
+  <div class="flex gap-2 mb-4">
+    <button class="tab-btn flex-1 py-2 rounded-lg text-sm font-semibold transition" data-tab="converter" onclick="switchTab('converter')">🔭 変換ツール</button>
+    <button class="tab-btn flex-1 py-2 rounded-lg text-sm font-semibold transition" data-tab="ascii" onclick="switchTab('ascii')">🔤 ASCII変換</button>
+    <button class="tab-btn flex-1 py-2 rounded-lg text-sm font-semibold transition" data-tab="game" onclick="switchTab('game')">⚡ ゲームモード</button>
+  </div>
+
+  <!-- 変換ツール -->
+  <div id="tab-converter" class="panel rounded-xl p-5">
+    <h2 class="text-cyan-400 font-bold mb-4">進数変換ツール</h2>
+    <div class="flex gap-3 mb-4 flex-wrap">
+      <div class="flex-1 min-w-32">
+        <label class="text-xs text-cyan-500 block mb-1">入力値</label>
+        <input id="convInput" type="text" placeholder="例: 42" class="w-full bg-gray-900 border border-cyan-800 text-white px-3 py-2 rounded-lg text-sm font-mono focus:outline-none focus:border-cyan-400">
+      </div>
+      <div class="flex-shrink-0">
+        <label class="text-xs text-cyan-500 block mb-1">元の進数</label>
+        <select id="convBase" class="bg-gray-900 border border-cyan-800 text-white px-3 py-2 rounded-lg text-sm">
+          <option value="2">2進数（バイナリ）</option>
+          <option value="8">8進数（オクタル）</option>
+          <option value="10" selected>10進数（デシマル）</option>
+          <option value="16">16進数（ヘキサ）</option>
+        </select>
+      </div>
+      <div class="flex-shrink-0 flex items-end">
+        <button onclick="convert()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-4 py-2 rounded-lg text-sm transition">変換</button>
+      </div>
+    </div>
+
+    <div id="convResult" class="hidden space-y-2 mb-4">
+      <div class="grid grid-cols-2 gap-2">
+        <div class="digit-box rounded-lg p-3">
+          <div class="text-xs text-cyan-500 mb-1">2進数 Binary</div>
+          <div id="res2" class="font-mono text-green-300 text-sm break-all"></div>
+        </div>
+        <div class="digit-box rounded-lg p-3">
+          <div class="text-xs text-cyan-500 mb-1">8進数 Octal</div>
+          <div id="res8" class="font-mono text-yellow-300 text-lg"></div>
+        </div>
+        <div class="digit-box rounded-lg p-3">
+          <div class="text-xs text-cyan-500 mb-1">10進数 Decimal</div>
+          <div id="res10" class="font-mono text-cyan-300 text-lg"></div>
+        </div>
+        <div class="digit-box rounded-lg p-3">
+          <div class="text-xs text-cyan-500 mb-1">16進数 Hexadecimal</div>
+          <div id="res16" class="font-mono text-purple-300 text-lg uppercase"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 変換手順 -->
+    <div id="convSteps" class="hidden">
+      <h3 class="text-xs text-cyan-500 font-semibold mb-2">変換手順（10進数を経由）</h3>
+      <div id="stepsContent" class="space-y-2 text-xs font-mono"></div>
+    </div>
+    <div id="convError" class="hidden text-red-400 text-sm mt-2"></div>
+  </div>
+
+  <!-- ASCII変換 -->
+  <div id="tab-ascii" class="panel rounded-xl p-5 hidden">
+    <h2 class="text-cyan-400 font-bold mb-4">ASCII変換 — 文字 → 10進 → 16進</h2>
+    <div class="flex gap-3 mb-4">
+      <input id="asciiInput" type="text" placeholder="変換したい文字列を入力..." class="flex-1 bg-gray-900 border border-cyan-800 text-white px-3 py-2 rounded-lg text-sm font-mono focus:outline-none focus:border-cyan-400">
+      <button onclick="convertAscii()" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2 rounded-lg text-sm transition">変換</button>
+    </div>
+    <div id="asciiResult" class="overflow-x-auto"></div>
+  </div>
+
+  <!-- ゲームモード -->
+  <div id="tab-game" class="panel rounded-xl p-5 hidden">
+    <div id="gameStart" class="">
+      <h2 class="text-cyan-400 font-bold mb-2">タイムアタックモード</h2>
+      <p class="text-sm text-cyan-600 mb-4">30秒以内に進数変換問題を解け！スコアはlocalStorageに保存されます。</p>
+      <div class="grid grid-cols-2 gap-4 mb-4 text-sm">
+        <div class="digit-box rounded-lg p-3 text-center">
+          <div class="text-cyan-500 text-xs">ハイスコア</div>
+          <div id="highScore" class="text-2xl font-bold text-yellow-300">0</div>
+        </div>
+        <div class="digit-box rounded-lg p-3 text-center">
+          <div class="text-cyan-500 text-xs">最長ストリーク</div>
+          <div id="bestStreak" class="text-2xl font-bold text-green-300">0</div>
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="text-xs text-cyan-500 block mb-1">難易度</label>
+        <select id="gameDifficulty" class="bg-gray-900 border border-cyan-800 text-white px-3 py-2 rounded-lg text-sm w-full">
+          <option value="easy">イージー（2進数↔10進数）</option>
+          <option value="normal" selected>ノーマル（2/8/10/16進変換）</option>
+          <option value="hard">ハード（複雑な大きな数）</option>
+        </select>
+      </div>
+      <button onclick="startGame()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white py-3 rounded-lg font-bold transition">🚀 ゲーム開始</button>
+    </div>
+
+    <div id="gameActive" class="hidden">
+      <div class="flex justify-between items-center mb-4">
+        <div class="text-xs text-cyan-500">残り時間</div>
+        <div class="text-xs text-cyan-500">スコア / ストリーク</div>
+      </div>
+      <div class="flex justify-between items-center mb-4">
+        <div id="timer" class="text-3xl font-bold text-cyan-300 font-mono blink">30</div>
+        <div class="text-right">
+          <span id="gameScore" class="text-2xl font-bold text-yellow-300">0</span>
+          <span class="text-cyan-500 mx-1">/</span>
+          <span id="gameStreak" class="text-xl font-bold text-green-300">0</span>🔥
+        </div>
+      </div>
+      <!-- プログレスバー -->
+      <div class="bg-gray-800 rounded-full h-2 mb-4">
+        <div id="timerBar" class="bg-cyan-500 h-2 rounded-full transition-all" style="width:100%"></div>
+      </div>
+
+      <div class="digit-box rounded-xl p-4 mb-4 text-center">
+        <div id="questionText" class="text-sm text-cyan-400 mb-2"></div>
+        <div id="questionNum" class="text-3xl font-bold text-white font-mono mb-1"></div>
+        <div id="questionDetail" class="text-xs text-cyan-500"></div>
+      </div>
+
+      <div class="flex gap-3 mb-3">
+        <input id="gameAnswer" type="text" placeholder="答えを入力..." class="flex-1 bg-gray-900 border border-cyan-700 text-white px-4 py-3 rounded-lg font-mono text-lg focus:outline-none focus:border-cyan-400" autocomplete="off">
+        <button onclick="submitAnswer()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-5 py-3 rounded-lg font-bold transition">送信</button>
+      </div>
+      <div id="gameFeedback" class="text-center text-sm h-6"></div>
+    </div>
+
+    <div id="gameOver" class="hidden text-center">
+      <div class="text-4xl mb-2">🛸</div>
+      <h3 class="text-xl font-bold text-cyan-300 mb-1">ゲーム終了！</h3>
+      <div class="digit-box rounded-xl p-4 mb-4 inline-block">
+        <div class="text-sm text-cyan-500">スコア</div>
+        <div id="finalScore" class="text-4xl font-bold text-yellow-300"></div>
+        <div id="finalStreak" class="text-sm text-green-300 mt-1"></div>
+        <div id="newRecord" class="text-xs text-yellow-400 mt-1 hidden">🏆 新記録！</div>
+      </div>
+      <div>
+        <button onclick="startGame()" class="bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-2 rounded-lg transition">もう一回</button>
+        <button onclick="endGame()" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2 rounded-lg transition ml-2">終了</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 星生成
+(function() {
+  const container = document.getElementById('stars');
+  for (let i = 0; i < 80; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const sz = Math.random() * 2 + 0.5;
+    s.style.cssText = `width:${sz}px;height:${sz}px;top:${Math.random()*100}%;left:${Math.random()*100}%;opacity:${Math.random()*0.6+0.2}`;
+    container.appendChild(s);
+  }
+})();
+
+// タブ
+function switchTab(name) {
+  ['converter','ascii','game'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('hidden', t !== name);
+  });
+  document.querySelectorAll('.tab-btn').forEach(b => {
+    const active = b.dataset.tab === name;
+    b.className = `tab-btn flex-1 py-2 rounded-lg text-sm font-semibold transition ${active ? 'bg-cyan-700 text-white' : 'bg-gray-900 text-cyan-500 hover:bg-gray-800'}`;
+  });
+}
+switchTab('converter');
+
+// 変換ツール
+function convert() {
+  const input = document.getElementById('convInput').value.trim();
+  const base = parseInt(document.getElementById('convBase').value);
+  const errEl = document.getElementById('convError');
+  const resEl = document.getElementById('convResult');
+  const stepsEl = document.getElementById('convSteps');
+  errEl.classList.add('hidden');
+  resEl.classList.add('hidden');
+  stepsEl.classList.add('hidden');
+
+  if (!input) { errEl.textContent = '値を入力してください'; errEl.classList.remove('hidden'); return; }
+  const dec = parseInt(input, base);
+  if (isNaN(dec) || dec < 0) { errEl.textContent = '無効な値です（その進数で使用できない文字が含まれています）'; errEl.classList.remove('hidden'); return; }
+
+  document.getElementById('res2').textContent = dec.toString(2);
+  document.getElementById('res8').textContent = dec.toString(8);
+  document.getElementById('res10').textContent = dec.toString(10);
+  document.getElementById('res16').textContent = dec.toString(16).toUpperCase();
+  resEl.classList.remove('hidden');
+
+  // 手順
+  const sc = document.getElementById('stepsContent');
+  sc.innerHTML = '';
+  const steps = [];
+  if (base !== 10) {
+    steps.push(`<div class="text-cyan-400">Step 1: <span class="text-white">${input}（${base}進数）</span> → <span class="text-cyan-300">10進数</span></div>`);
+    if (base === 2) {
+      let detail = input.split('').reverse().map((b,i) => `${b}×2<sup>${i}</sup>`).reverse().join(' + ');
+      steps.push(`<div class="text-gray-400 pl-4">= ${detail} = <span class="text-white">${dec}</span></div>`);
+    } else if (base === 16) {
+      const digits = '0123456789ABCDEF';
+      let detail = input.toUpperCase().split('').reverse().map((c,i) => `${c}(${digits.indexOf(c)})×16<sup>${i}</sup>`).reverse().join(' + ');
+      steps.push(`<div class="text-gray-400 pl-4">= ${detail} = <span class="text-white">${dec}</span></div>`);
+    } else {
+      steps.push(`<div class="text-gray-400 pl-4">= <span class="text-white">${dec}</span></div>`);
+    }
+    steps.push(`<div class="mt-1 text-cyan-400">Step 2: <span class="text-cyan-300">${dec}（10進数）</span> → 各進数</div>`);
+  } else {
+    steps.push(`<div class="text-cyan-400">${dec}（10進数）を各進数に変換</div>`);
+  }
+  // 2進変換詳細
+  let n = dec, bits = [];
+  const tmp = n;
+  while (n > 0) { bits.unshift(n % 2); n = Math.floor(n / 2); }
+  if (bits.length) steps.push(`<div class="text-green-400 pl-4">2進: ${tmp}÷2の余りを逆順 → <span class="text-white">${bits.join('')}</span></div>`);
+  sc.innerHTML = steps.join('');
+  stepsEl.classList.remove('hidden');
+}
+document.getElementById('convInput').addEventListener('keydown', e => { if(e.key==='Enter') convert(); });
+
+// ASCII変換
+function convertAscii() {
+  const input = document.getElementById('asciiInput').value;
+  if (!input) return;
+  const rows = Array.from(input).map(ch => {
+    const code = ch.charCodeAt(0);
+    const bin = code.toString(2).padStart(8,'0');
+    const hex = code.toString(16).toUpperCase().padStart(2,'0');
+    return `<tr class="border-b border-cyan-900">
+      <td class="px-3 py-2 text-white font-mono text-lg">${ch === ' ' ? '(space)' : ch}</td>
+      <td class="px-3 py-2 text-cyan-300 font-mono">${code}</td>
+      <td class="px-3 py-2 text-purple-300 font-mono">${hex}</td>
+      <td class="px-3 py-2 text-green-300 font-mono text-xs">${bin}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('asciiResult').innerHTML = `
+    <table class="w-full text-sm">
+      <thead><tr class="text-cyan-500 text-xs border-b border-cyan-800">
+        <th class="px-3 py-2 text-left">文字</th>
+        <th class="px-3 py-2 text-left">10進</th>
+        <th class="px-3 py-2 text-left">16進</th>
+        <th class="px-3 py-2 text-left">2進数</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+document.getElementById('asciiInput').addEventListener('keydown', e => { if(e.key==='Enter') convertAscii(); });
+
+// ゲーム
+let gameTimer, gameInterval, gameScore, gameStreak, timeLeft, currentQ, bestStreak = 0;
+
+function loadSaved() {
+  const hs = parseInt(localStorage.getItem('alienConv_highScore') || '0');
+  const bs = parseInt(localStorage.getItem('alienConv_bestStreak') || '0');
+  document.getElementById('highScore').textContent = hs;
+  document.getElementById('bestStreak').textContent = bs;
+  bestStreak = bs;
+}
+loadSaved();
+
+function generateQuestion(difficulty) {
+  const bases = { easy: [2,10], normal: [2,8,10,16], hard: [2,8,10,16] };
+  const maxVal = { easy: 31, normal: 255, hard: 4095 };
+  const bList = bases[difficulty];
+  const fromBase = bList[Math.floor(Math.random()*bList.length)];
+  let toBase;
+  do { toBase = bList[Math.floor(Math.random()*bList.length)]; } while (toBase === fromBase);
+  const max = maxVal[difficulty];
+  const dec = Math.floor(Math.random() * max) + 1;
+  const display = dec.toString(fromBase).toUpperCase();
+  const answer = dec.toString(toBase).toUpperCase();
+  const names = {2:'2進数',8:'8進数',10:'10進数',16:'16進数'};
+  return { display, fromBase, toBase, answer, dec,
+    question: `${names[fromBase]}: ${display}`,
+    detail: `→ ${names[toBase]}に変換せよ` };
+}
+
+function startGame() {
+  const diff = document.getElementById('gameDifficulty').value;
+  gameScore = 0; gameStreak = 0; timeLeft = 30;
+  document.getElementById('gameStart').classList.add('hidden');
+  document.getElementById('gameOver').classList.add('hidden');
+  document.getElementById('gameActive').classList.remove('hidden');
+  document.getElementById('gameScore').textContent = 0;
+  document.getElementById('gameStreak').textContent = 0;
+  document.getElementById('gameFeedback').textContent = '';
+  currentQ = generateQuestion(diff);
+  showQuestion();
+  document.getElementById('gameAnswer').focus();
+
+  gameInterval = setInterval(() => {
+    timeLeft--;
+    document.getElementById('timer').textContent = timeLeft;
+    document.getElementById('timerBar').style.width = (timeLeft/30*100) + '%';
+    if (timeLeft <= 10) document.getElementById('timerBar').className = 'bg-red-500 h-2 rounded-full transition-all';
+    if (timeLeft <= 0) { clearInterval(gameInterval); showGameOver(diff); }
+  }, 1000);
+}
+
+function showQuestion() {
+  document.getElementById('questionText').textContent = currentQ.question;
+  document.getElementById('questionNum').textContent = '';
+  document.getElementById('questionDetail').textContent = currentQ.detail;
+  document.getElementById('gameAnswer').value = '';
+}
+
+function submitAnswer() {
+  if (!document.getElementById('gameActive').offsetParent) return;
+  const ans = document.getElementById('gameAnswer').value.trim().toUpperCase().replace(/^0X/,'');
+  const diff = document.getElementById('gameDifficulty').value;
+  const fb = document.getElementById('gameFeedback');
+
+  if (ans === currentQ.answer) {
+    gameScore++; gameStreak++;
+    document.getElementById('gameScore').textContent = gameScore;
+    document.getElementById('gameStreak').textContent = gameStreak;
+    fb.textContent = `✅ 正解！（${currentQ.answer}）`;
+    fb.className = 'text-center text-sm h-6 text-green-400';
+    timeLeft = Math.min(30, timeLeft + 2);
+  } else {
+    gameStreak = 0;
+    document.getElementById('gameStreak').textContent = 0;
+    fb.textContent = `❌ 不正解。正解は ${currentQ.answer}`;
+    fb.className = 'text-center text-sm h-6 text-red-400';
+    document.getElementById('gameActive').classList.add('shake');
+    setTimeout(() => document.getElementById('gameActive').classList.remove('shake'), 300);
+  }
+  currentQ = generateQuestion(diff);
+  showQuestion();
+  setTimeout(() => { fb.textContent = ''; }, 1200);
+}
+
+function showGameOver(diff) {
+  document.getElementById('gameActive').classList.add('hidden');
+  document.getElementById('gameOver').classList.remove('hidden');
+  document.getElementById('finalScore').textContent = gameScore;
+  document.getElementById('finalStreak').textContent = `最長ストリーク: ${gameStreak}`;
+  const prevHigh = parseInt(localStorage.getItem('alienConv_highScore') || '0');
+  const prevStreak = parseInt(localStorage.getItem('alienConv_bestStreak') || '0');
+  if (gameScore > prevHigh || gameStreak > prevStreak) {
+    document.getElementById('newRecord').classList.remove('hidden');
+    localStorage.setItem('alienConv_highScore', Math.max(gameScore, prevHigh));
+    localStorage.setItem('alienConv_bestStreak', Math.max(gameStreak, prevStreak));
+    loadSaved();
+  } else {
+    document.getElementById('newRecord').classList.add('hidden');
+  }
+}
+
+function endGame() {
+  clearInterval(gameInterval);
+  document.getElementById('gameOver').classList.add('hidden');
+  document.getElementById('gameStart').classList.remove('hidden');
+}
+
+document.getElementById('gameAnswer').addEventListener('keydown', e => { if(e.key==='Enter') submitAnswer(); });
+</script>
+</body>
+</html>
